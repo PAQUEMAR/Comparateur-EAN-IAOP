@@ -1,3 +1,4 @@
 build:
   installCommand: pip install -r requirements.txt
-  startCommand: python -m streamlit run app.py --server.port=$PORT --server.enableCORS=false --server.enableXsrfProtection=false
+
+start: streamlit run app.py --server.port=$PORT --server.enableCORS=false --server.enableXsrfProtection=false

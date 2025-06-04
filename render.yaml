@@ -1,8 +1,6 @@
 services:
   - type: web
-    name: comparateur-ean-iaop
+    name: Comparateur-EAN-IAOP
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: streamlit run app.py --server.port=$PORT --server.enableCORS=false --server.enableXsrfProtection=false
-    plan: free
-

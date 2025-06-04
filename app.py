@@ -12,7 +12,7 @@ def extract_price(text):
     return None
 
 st.set_page_config(page_title="Comparateur EAN IAOP", page_icon="💊", layout="centered")
-st.title("💊 Comparateur de prix par EAN via Google")
+st.title("🔎 Comparateur de prix par EAN International AOP")
 
 ean = st.text_input("🔎 Entrez un EAN ou un mot-clé :")
 target_price_ht = st.number_input("🎯 Prix cible HT (€)", min_value=0.0, format="%.2f")

@@ -1,11 +1,5 @@
-services:
-- type: web
-  name: Comparateur-EAN-IAOP
-  runtime: python
-  repo: https://github.com/PAQUEMAR/Comparateur-EAN-IAOP
-  plan: free
-  region: oregon
-  buildCommand: pip install -r requirements.txt
-  startCommand: python -m streamlit run app.py --server.port=$PORT --server.enableCORS=false --server.enableXsrfProtection=false
-  autoDeployTrigger: "off"
-version: "1"
+build:
+  installCommand: pip install -r requirements.txt
+
+start:
+  command: python -m streamlit run app.py --server.port=$PORT --server.enableCORS=false --server.enableXsrfProtection=false

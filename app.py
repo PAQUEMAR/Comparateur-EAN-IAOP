@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import requests
-from bs4 import BeautifulSoup
 import re
 
 # Placement OBLIGATOIRE en tout premier avant tout widget Streamlit
@@ -46,24 +45,31 @@ if ean:
                     price_ht = price_ttc / (1 + tva_rate / 100)
                     economie = target_price_ht - price_ht
                     economie_pct = (economie / target_price_ht * 100) if target_price_ht else 0
+                else:
+                    price_ht = None
+                    economie = None
+                    economie_pct = None
 
-                    results.append({
-                        "Titre": title,
-                        "Lien": link,
-                        "Prix TTC (€)": round(price_ttc, 2),
-                        "Prix HT (€)": round(price_ht, 2),
-                        "Prix cible HT (€)": round(target_price_ht, 2),
-                        "Économie (€)": round(economie, 2),
-                        "Économie (%)": round(economie_pct, 1)
-                    })
+                results.append({
+                    "Titre": title,
+                    "Lien": link,
+                    "Prix TTC (€)": round(price_ttc, 2) if price_ttc else "-",
+                    "Prix HT (€)": round(price_ht, 2) if price_ht else "-",
+                    "Prix cible HT (€)": round(target_price_ht, 2),
+                    "Économie (€)": round(economie, 2) if economie is not None else "-",
+                    "Économie (%)": round(economie_pct, 1) if economie_pct is not None else "-"
+                })
 
             if results:
                 df = pd.DataFrame(results)
-                df = df.sort_values(by="Prix HT (€)")
+                # Trier par prix HT uniquement si prix disponible
+                df_with_price = df[df["Prix HT (€)"] != "-"]
+                df_without_price = df[df["Prix HT (€)"] == "-"]
+                df_sorted = pd.concat([df_with_price.sort_values(by="Prix HT (€)"), df_without_price])
                 st.success(f"✅ {len(df)} résultats trouvés.")
-                st.dataframe(df, use_container_width=True)
+                st.dataframe(df_sorted, use_container_width=True)
             else:
-                st.warning("Aucun prix trouvé.")
+                st.warning("Aucun résultat trouvé.")
 
         except Exception as e:
             st.error(f"Erreur lors de la recherche : {e}")

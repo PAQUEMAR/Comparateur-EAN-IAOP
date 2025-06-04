@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import requests
@@ -11,13 +10,21 @@ def extract_price(text):
         return float(match.group(1).replace(',', '.'))
     return None
 
+# Configuration de la page
 st.set_page_config(page_title="Comparateur EAN IAOP", page_icon="💊", layout="centered")
+
+# Affichage du logo IAOP (à placer dans le même dossier que ce script)
+st.image("logo_IAOP.png", width=200)
+
+# Titre de l'application
 st.title("🔎 Comparateur de prix par EAN International AOP")
 
+# Champs utilisateur
 ean = st.text_input("🔎 Entrez un EAN ou un mot-clé :")
 target_price_ht = st.number_input("🎯 Prix cible HT (€)", min_value=0.0, format="%.2f")
 tva_rate = st.number_input("💶 Taux de TVA (%)", min_value=0.0, max_value=30.0, value=20.0)
 
+# Lancement de la recherche
 if ean:
     st.markdown(f"#### Résultats pour : `{ean}`")
     with st.spinner("Recherche en cours..."):

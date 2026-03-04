@@ -21,7 +21,7 @@ tva_rate = st.number_input("💶 Taux de TVA (%)", min_value=0.0, max_value=30.0
 if ean:
     st.markdown(f"#### Résultats pour : `{ean}`")
     with st.spinner("Recherche en cours..."):
-        api_key = "9b4f626e03f2c28cc2fdedccc4a483e4a0626055363820c01e7fb5cc35ce1baa"
+        api_key = "os.environ.get("SERPAPI_KEY")"
         params = {
             "q": ean,
             "engine": "google",

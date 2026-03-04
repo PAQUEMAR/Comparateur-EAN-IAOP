@@ -1,126 +1,162 @@
 import os
+import re
 import streamlit as st
 import pandas as pd
 import requests
-import re
 
-# Configuration Streamlit
-st.set_page_config(
-    page_title="Comparateur EAN IAOP",
-    page_icon="💊",
-    layout="centered"
-)
+st.set_page_config(page_title="Comparateur IAOP", page_icon="💊", layout="centered")
+st.title("🔎 Comparateur de prix (Google Shopping) — International AOP")
 
-st.title("🔎 Comparateur de prix par EAN - International AOP")
+SERPAPI_KEY = os.environ.get("SERPAPI_KEY")
 
-def extract_price(text):
-    match = re.search(r"(\d+[\.,]?\d*) ?€", text)
-    if match:
-        return float(match.group(1).replace(',', '.'))
-    return None
+def safe_float(x):
+    try:
+        return float(str(x).replace(",", "."))
+    except:
+        return None
 
-ean = st.text_input("🔎 Entrez un EAN ou un mot-clé :")
+def extract_price_from_text(text: str):
+    # Ex: "12,90 €", "12.90€"
+    if not text:
+        return None
+    m = re.search(r"(\d+(?:[.,]\d+)?)\s*€", text)
+    if not m:
+        return None
+    return safe_float(m.group(1))
 
-target_price_ht = st.number_input(
-    "🎯 Prix cible HT (€)",
-    min_value=0.0,
-    format="%.2f"
-)
+def serpapi_google_shopping(query: str, hl="fr", gl="fr", num=20):
+    url = "https://serpapi.com/search.json"
+    params = {
+        "engine": "google_shopping",
+        "q": query,
+        "api_key": SERPAPI_KEY,
+        "hl": hl,
+        "gl": gl,
+        "num": num
+    }
+    r = requests.get(url, params=params, timeout=30)
+    r.raise_for_status()
+    return r.json()
 
-tva_rate = st.number_input(
-    "💶 Taux de TVA (%)",
-    min_value=0.0,
-    max_value=30.0,
-    value=20.0
-)
+def serpapi_google_organic(query: str, hl="fr", gl="fr", num=10):
+    url = "https://serpapi.com/search.json"
+    params = {
+        "engine": "google",
+        "q": query,
+        "api_key": SERPAPI_KEY,
+        "hl": hl,
+        "gl": gl,
+        "num": num
+    }
+    r = requests.get(url, params=params, timeout=30)
+    r.raise_for_status()
+    return r.json()
 
-if ean:
+# UI
+query = st.text_input("🔎 Entrez un EAN ou un mot-clé :")
+target_price_ht = st.number_input("🎯 Prix cible HT (€)", min_value=0.0, format="%.2f")
+tva_rate = st.number_input("💶 Taux de TVA (%)", min_value=0.0, max_value=30.0, value=20.0)
 
-    st.markdown(f"#### Résultats pour : `{ean}`")
+mode = st.selectbox("Mode", ["Google Shopping (recommandé)", "Google (fallback snippets)"])
+
+if query:
+    if not SERPAPI_KEY:
+        st.error("❌ SERPAPI_KEY manquante. Ajoute-la dans Render → Environment Variables.")
+        st.stop()
+
+    st.markdown(f"### Résultats pour : `{query}`")
 
     with st.spinner("Recherche en cours..."):
-
-        api_key = os.environ.get("SERPAPI_KEY")
-
-        if not api_key:
-            st.error("La clé SERPAPI_KEY n'est pas configurée.")
-            st.stop()
-
-        params = {
-            "q": ean,
-            "engine": "google",
-            "api_key": api_key,
-            "hl": "fr",
-            "gl": "fr"
-        }
+        results = []
 
         try:
+            if mode.startswith("Google Shopping"):
+                data = serpapi_google_shopping(query)
+                items = data.get("shopping_results", [])
 
-            response = requests.get(
-                "https://serpapi.com/search",
-                params=params,
-                timeout=30
-            )
+                for it in items:
+                    title = it.get("title", "") or "-"
+                    link = it.get("link", "") or it.get("product_link", "") or "-"
+                    source = it.get("source", "") or it.get("seller", "") or "-"
+                    price_str = it.get("price", "")  # souvent "12,90 €"
+                    price_ttc = extract_price_from_text(price_str)
 
-            data = response.json()
+                    # parfois SerpAPI donne extracted_price
+                    extracted = it.get("extracted_price")
+                    if price_ttc is None and extracted is not None:
+                        price_ttc = safe_float(extracted)
 
-            results = []
+                    if price_ttc is not None:
+                        price_ht = price_ttc / (1 + tva_rate / 100)
+                        economie = target_price_ht - price_ht if target_price_ht else None
+                        economie_pct = (economie / target_price_ht * 100) if target_price_ht and economie is not None else None
+                    else:
+                        price_ht = None
+                        economie = None
+                        economie_pct = None
 
-            for result in data.get("organic_results", []):
-
-                title = result.get("title", "")
-                link = result.get("link", "")
-                snippet = result.get("snippet", "")
-
-                price_ttc = extract_price(title) or extract_price(snippet)
-
-                if price_ttc:
-
-                    price_ht = price_ttc / (1 + tva_rate / 100)
-
-                    economie = target_price_ht - price_ht
-
-                    economie_pct = (
-                        economie / target_price_ht * 100
-                        if target_price_ht else 0
-                    )
-
-                else:
-
-                    price_ht = None
-                    economie = None
-                    economie_pct = None
-
-                results.append({
-                    "Titre": title,
-                    "Lien": link,
-                    "Prix TTC (€)": round(price_ttc, 2) if price_ttc else "-",
-                    "Prix HT (€)": round(price_ht, 2) if price_ht else "-",
-                    "Prix cible HT (€)": round(target_price_ht, 2),
-                    "Économie (€)": round(economie, 2) if economie is not None else "-",
-                    "Économie (%)": round(economie_pct, 1) if economie_pct is not None else "-"
-                })
-
-            if results:
-
-                df = pd.DataFrame(results)
-
-                df_with_price = df[df["Prix HT (€)"] != "-"]
-                df_without_price = df[df["Prix HT (€)"] == "-"]
-
-                df_sorted = pd.concat([
-                    df_with_price.sort_values(by="Prix HT (€)"),
-                    df_without_price
-                ])
-
-                st.success(f"✅ {len(df)} résultats trouvés.")
-
-                st.dataframe(df_sorted, use_container_width=True)
+                    results.append({
+                        "Source": source,
+                        "Titre": title,
+                        "Prix TTC (€)": round(price_ttc, 2) if price_ttc is not None else "-",
+                        "Prix HT (€)": round(price_ht, 2) if price_ht is not None else "-",
+                        "Lien": link,
+                        "Économie (€)": round(economie, 2) if economie is not None else "-",
+                        "Économie (%)": round(economie_pct, 1) if economie_pct is not None else "-"
+                    })
 
             else:
+                data = serpapi_google_organic(query)
+                items = data.get("organic_results", [])
 
-                st.warning("Aucun résultat trouvé.")
+                for it in items:
+                    title = it.get("title", "") or "-"
+                    link = it.get("link", "") or "-"
+                    snippet = it.get("snippet", "") or ""
+                    price_ttc = extract_price_from_text(title) or extract_price_from_text(snippet)
 
+                    if price_ttc is not None:
+                        price_ht = price_ttc / (1 + tva_rate / 100)
+                        economie = target_price_ht - price_ht if target_price_ht else None
+                        economie_pct = (economie / target_price_ht * 100) if target_price_ht and economie is not None else None
+                    else:
+                        price_ht = None
+                        economie = None
+                        economie_pct = None
+
+                    results.append({
+                        "Source": "Google",
+                        "Titre": title,
+                        "Prix TTC (€)": round(price_ttc, 2) if price_ttc is not None else "-",
+                        "Prix HT (€)": round(price_ht, 2) if price_ht is not None else "-",
+                        "Lien": link,
+                        "Économie (€)": round(economie, 2) if economie is not None else "-",
+                        "Économie (%)": round(economie_pct, 1) if economie_pct is not None else "-"
+                    })
+
+        except requests.HTTPError as e:
+            st.error(f"Erreur SerpAPI (HTTP). Vérifie ta clé / quota. Détail: {e}")
+            st.stop()
         except Exception as e:
+            st.error(f"Erreur : {e}")
+            st.stop()
 
-            st.error(f"Erreur lors de la recherche : {e}")
+    if not results:
+        st.warning("Aucun résultat trouvé.")
+    else:
+        df = pd.DataFrame(results)
+
+        # Tri : d'abord ceux qui ont un prix HT, puis les autres
+        df_with = df[df["Prix HT (€)"] != "-"].copy()
+        df_without = df[df["Prix HT (€)"] == "-"].copy()
+
+        if not df_with.empty:
+            df_with["Prix HT (€)"] = df_with["Prix HT (€)"].astype(float)
+            df_with = df_with.sort_values(by="Prix HT (€)", ascending=True)
+
+        df_sorted = pd.concat([df_with, df_without], ignore_index=True)
+
+        st.success(f"✅ {len(df_sorted)} résultats.")
+        st.dataframe(df_sorted, use_container_width=True)
+
+        st.caption("Astuce : si tu as 'Aucun résultat', passe en mode Google Shopping (recommandé).")
